@@ -1,0 +1,69 @@
+
+// Kernel to unwrap the annulus (doughnut)
+// dXMult       - precaulated output pano X scale multipler
+// dYMult       - precaulated output pano Y scale multipler
+// offsetAngle  - rotation to apply to the input image
+// minRadius    - the inner radius
+// inCentre     - the centre of the doughtnut
+
+kernel vec2 scopeUnwrap (float dXMult, float dYMult, float offsetAngle, float minRadius, vec2 inCentre) {
+
+    float ampl = destCoord().y * dYMult + minRadius;
+
+    vec2 sc = sincos( destCoord().x * dXMult + offsetAngle );
+
+    return sc * ampl + inCentre;
+
+}
+
+
+
+// Kernel to wrap a pano into a planet
+// tY       -
+// sX       -
+// sY       -
+// rotation - rotation of the output image
+
+kernel vec2 planetCore(float tY, float sX, float sY, float rotation) {
+    vec2 dc = destCoord();
+    float x = mod( rotation - atan(dc.y, dc.x), 3.1415926535897932384626433832795 * 2.0 ) * sX;
+    float y = sqrt(dc.x * dc.x + dc.y * dc.y) * sY - tY;
+    return vec2(x, y);
+}
+
+// kernel to create a gradient from an inner radius to an outer radius
+kernel vec4 blurAmount(float innerR, float outerR, float cornerR) {
+    float r = length(destCoord());
+    // float innerBlur = 1.0 - smoothstep(0.0, innerR, r);
+    // float outerBlur = smoothstep(outerR, cornerR, r);
+    float outerBlur = (clamp(r, outerR, cornerR) - outerR) / (cornerR - outerR);
+    float innerBlur = (innerR - clamp(r, 0.0, innerR)) / innerR;
+    float blur = outerBlur + innerBlur * 0.025;
+    return vec4(blur, blur, blur, 1.0);
+}
+
+// clamps an image in the Y axis and tiles it in the X axis
+kernel vec2 clampYTileX(float minX, float minY, float width, float maxY) {
+    float x = mod( destCoord().x - minX, width) + minX;
+    float y = clamp(destCoord().y, minY, maxY);
+    return vec2(x, y);
+}
+
+// fades an image to a single colour in the Y axis
+kernel vec4 blendToColour(__sample src, __color blendTo, float minY, float maxY) {
+    float slider = smoothstep( minY, maxY, destCoord().y );
+    return mix(src.rgba, blendTo.rgba, slider);
+}
+
+// fades an image from a single colour in the Y axis
+kernel vec4 blendFromColour(__sample src, __color blendTo, float minY, float maxY) {
+    float slider = smoothstep(minY, maxY, destCoord().y) ;
+    return mix(blendTo.rgba, src.rgba, slider);
+}
+
+// fades an image to a single colour radially
+kernel vec4 blendToColourRadial(__sample src, __color blendTo, float innerRadius, float outerRadius) {
+    float slider = smoothstep( innerRadius, outerRadius, length(destCoord()) );
+    return mix(blendTo.rgba, src.rgba, slider);
+}
+
